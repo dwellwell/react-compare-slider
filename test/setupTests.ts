@@ -7,4 +7,11 @@ const ResizeObserver = jest.fn().mockImplementation(() => ({
   disconnect: jest.fn(),
 }));
 
+// Object.defineProperty(globalThis, 'navigator', {
+//   value: {
+//     agent: 'Windows',
+//     maxTouchPoints: 0,
+//   },
+// });
+
 Object.defineProperty(globalThis, 'ResizeObserver', { value: ResizeObserver });

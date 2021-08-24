@@ -121,19 +121,10 @@ export const ReactCompareSlider: React.FC<
   const prevPropPosition = usePrevious(position);
   /** Whether user is currently dragging. */
   const [isDragging, setIsDragging] = useState(false);
-  /** Whether component has a `window` event binding. */
-  const hasWindowBinding = useRef(false);
   /** Target container for pointer events. */
   const [interactiveTarget, setInteractiveTarget] = useState<HTMLDivElement | null>();
   /** Whether the bounds of the container element have been synchronised. */
   const [didSyncBounds, setDidSyncBounds] = useState(false);
-
-  // Set target container for pointer events.
-  useEffect(() => {
-    setInteractiveTarget(
-      onlyHandleDraggable ? handleContainerRef.current : rootContainerRef.current
-    );
-  }, [onlyHandleDraggable]);
 
   /** Update internal position value. */
   const updateInternalPosition = useCallback(
@@ -229,7 +220,14 @@ export const ReactCompareSlider: React.FC<
     [didSyncBounds, onPositionChange]
   );
 
-  // Update internal position when other user controllable props change.
+  // Set target container for pointer events when `onlyHandleDraggable` changes.
+  useEffect(() => {
+    setInteractiveTarget(
+      onlyHandleDraggable ? handleContainerRef.current : rootContainerRef.current
+    );
+  }, [onlyHandleDraggable]);
+
+  // Set internal position when other user controllable props change.
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const { width, height } = rootContainerRef.current!.getBoundingClientRect();
@@ -248,40 +246,50 @@ export const ReactCompareSlider: React.FC<
 
   /** Handle mouse/touch down. */
   const handlePointerDown = useCallback(
-    (ev: MouseEvent | TouchEvent) => {
+    (ev: PointerEvent) => {
       ev.preventDefault();
+
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      interactiveTarget!.setPointerCapture(ev.pointerId);
+      setIsDragging(true);
 
       updateInternalPosition({
         portrait,
         boundsPadding,
         isOffset: true,
-        x: ev instanceof MouseEvent ? ev.pageX : ev.touches[0].pageX,
-        y: ev instanceof MouseEvent ? ev.pageY : ev.touches[0].pageY,
+        x: ev.pageX,
+        y: ev.pageY,
       });
-
-      setIsDragging(true);
     },
-    [portrait, boundsPadding, updateInternalPosition]
+    [boundsPadding, interactiveTarget, portrait, updateInternalPosition]
   );
 
   /** Handle mouse/touch move. */
   const handlePointerMove = useCallback(
-    function moveCall(ev: MouseEvent | TouchEvent) {
+    function moveCall(ev: PointerEvent) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      if (!interactiveTarget!.hasPointerCapture(ev.pointerId)) return;
+
       updateInternalPosition({
         portrait,
         boundsPadding,
         isOffset: true,
-        x: ev instanceof MouseEvent ? ev.pageX : ev.touches[0].pageX,
-        y: ev instanceof MouseEvent ? ev.pageY : ev.touches[0].pageY,
+        x: ev.pageX,
+        y: ev.pageY,
       });
     },
-    [portrait, boundsPadding, updateInternalPosition]
+    [boundsPadding, interactiveTarget, portrait, updateInternalPosition]
   );
 
   /** Handle mouse/touch up. */
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+  const handlePointerUp = useCallback(
+    (ev: PointerEvent) => {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      interactiveTarget!.releasePointerCapture(ev.pointerId);
+      setIsDragging(false);
+    },
+    [interactiveTarget]
+  );
 
   /** Resync internal position on resize. */
   const handleResize = useCallback(
@@ -296,32 +304,11 @@ export const ReactCompareSlider: React.FC<
     [portrait, boundsPadding, updateInternalPosition]
   );
 
-  // Allow drag outside of container while pointer is still down.
-  useEffect(() => {
-    if (isDragging && !hasWindowBinding.current) {
-      window.addEventListener('mousemove', handlePointerMove, EVENT_PASSIVE_PARAMS);
-      window.addEventListener('mouseup', handlePointerUp, EVENT_PASSIVE_PARAMS);
-      window.addEventListener('touchmove', handlePointerMove, EVENT_PASSIVE_PARAMS);
-      window.addEventListener('touchend', handlePointerUp, EVENT_PASSIVE_PARAMS);
-      hasWindowBinding.current = true;
-    }
-
-    return (): void => {
-      if (hasWindowBinding.current) {
-        window.removeEventListener('mousemove', handlePointerMove);
-        window.removeEventListener('mouseup', handlePointerUp);
-        window.removeEventListener('touchmove', handlePointerMove);
-        window.removeEventListener('touchend', handlePointerUp);
-        hasWindowBinding.current = false;
-      }
-    };
-  }, [handlePointerMove, handlePointerUp, isDragging]);
-
   // Bind resize observer to container.
   useResizeObserver(rootContainerRef, handleResize);
 
   useEventListener(
-    'mousedown',
+    'pointerdown',
     handlePointerDown,
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     interactiveTarget!,
@@ -329,12 +316,30 @@ export const ReactCompareSlider: React.FC<
   );
 
   useEventListener(
-    'touchstart',
-    handlePointerDown,
+    'pointerup',
+    handlePointerUp,
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     interactiveTarget!,
-    EVENT_CAPTURE_PARAMS
+    EVENT_PASSIVE_PARAMS
   );
+
+  // Only bind `pointermove` event when user is dragging to avoid listening to every
+  // movement over the container.
+  useEffect(() => {
+    if (isDragging && interactiveTarget) {
+      interactiveTarget.addEventListener(
+        'pointermove',
+        handlePointerMove,
+        EVENT_PASSIVE_PARAMS
+      );
+    }
+
+    return () => {
+      if (interactiveTarget) {
+        interactiveTarget.removeEventListener('pointermove', handlePointerMove);
+      }
+    };
+  }, [handlePointerMove, interactiveTarget, isDragging]);
 
   // Use custom handle if requested.
   const Handle = handle || <ReactCompareSliderHandle portrait={portrait} />;

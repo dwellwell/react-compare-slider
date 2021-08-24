@@ -1,5 +1,6 @@
 import React from 'react';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render } from '@testing-library/react';
+import 'pepjs';
 
 import { ReactCompareSlider, ReactCompareSliderHandle } from '../src';
 
@@ -120,38 +121,26 @@ describe('ReactCompareSlider', () => {
       />
     );
 
+    // const target = {
+    //   setPointerCapture: jest.fn(),
+    //   hasPointerCapture: jest.fn(),
+    //   releasePointerCapture: jest.fn(),
+    // };
+
     const component = getByTestId(testId);
-    fireEvent.mouseDown(component, { pageX: 1024, pageY: 256 });
-    fireEvent.mouseMove(component, { pageX: 1024, pageY: 0 });
-    fireEvent.mouseUp(component, { pageX: 1024, pageY: 0 });
-    expect(handlePositionChange).toHaveBeenCalledTimes(4);
-  });
 
-  it('Should execute `onPositionChange` callback on main container touch interactions.', () => {
-    const testId = 'testaroo';
-    const handlePositionChange = jest.fn();
-    const style = { width: 1024, height: 768 };
-
-    const { getByTestId } = render(
-      <ReactCompareSlider
-        data-testid={testId}
-        style={style}
-        itemOne={<img src="https://via.placeholder.com/1024x768" style={style} />}
-        itemTwo={<img src="https://via.placeholder.com/1024x768" style={style} />}
-        portrait
-        onPositionChange={handlePositionChange}
-      />
+    fireEvent(component, createEvent.pointerDown(component, { buttons: 1 }));
+    fireEvent(component, createEvent.pointerMove(component, { buttons: 1 }));
+    fireEvent(
+      component,
+      createEvent.pointerMove(component, { buttons: 1, pageX: 256, pageY: 200 })
     );
+    fireEvent(component, createEvent.pointerUp(component, { buttons: 1 }));
 
-    const component = getByTestId(testId);
-    fireEvent.touchStart(component, { touches: [{ pageX: 1024, pageY: 256 }] });
-    // Trigger with same position multiple times to ensure duplicate positions only fire once.
-    fireEvent.touchMove(component, { touches: [{ pageX: 1024, pageY: 0 }] });
-    fireEvent.touchMove(component, { touches: [{ pageX: 1024, pageY: 0 }] });
-    fireEvent.touchMove(component, { touches: [{ pageX: 1024, pageY: 0 }] });
-    fireEvent.touchMove(component, { touches: [{ pageX: 1024, pageY: 256 }] });
-    fireEvent.touchEnd(component, { touches: [{ pageX: 1024, pageY: 0 }] });
-    expect(handlePositionChange).toHaveBeenCalledTimes(5);
+    // fireEvent.pointerDown(component, { pageX: 1024, pageY: 256 });
+    // fireEvent.pointerMove(component, { pageX: 512, pageY: 512 });
+    // fireEvent.pointerUp(component, { pageX: 1024, pageY: 0 });
+    expect(handlePositionChange).toHaveBeenCalledTimes(4);
   });
 
   it('Should only execute `onPositionChange` callback on handle interactions when using `onlyHandleDraggable`.', () => {
@@ -173,17 +162,23 @@ describe('ReactCompareSlider', () => {
       />
     );
 
+    const target = {
+      setPointerCapture: jest.fn(),
+      hasPointerCapture: jest.fn(),
+      releasePointerCapture: jest.fn(),
+    };
+
     const component = getByTestId(componentTestId);
-    fireEvent.mouseDown(component, { pageX: 250, pageY: 20 });
-    fireEvent.mouseMove(component, { pageX: 100, pageY: 20 });
-    fireEvent.mouseUp(component, { pageX: 100, pageY: 20 });
+    fireEvent.pointerDown(component, { pageX: 250, pageY: 20, target });
+    fireEvent.pointerMove(component, { pageX: 100, pageY: 20, target });
+    fireEvent.pointerUp(component, { pageX: 100, pageY: 20, target });
     // We expect the position to be called twice on mount.
     expect(handlePositionChange).toHaveBeenCalledTimes(2);
 
     const handle = getByTestId(handleTestId);
-    fireEvent.mouseDown(handle, { pageX: 250, pageY: 20 });
-    fireEvent.mouseMove(handle, { pageX: 100, pageY: 20 });
-    fireEvent.mouseUp(handle, { pageX: 100, pageY: 20 });
+    fireEvent.pointerDown(handle, { buttons: 1, pageX: 250, pageY: 20, target });
+    fireEvent.pointerMove(handle, { buttons: 1, pageX: 100, pageY: 20, target });
+    fireEvent.pointerUp(handle, { buttons: 1, pageX: 100, pageY: 20, target });
     // mount + mousedown + mousemove.
     expect(handlePositionChange).toHaveBeenCalledTimes(4);
   });
